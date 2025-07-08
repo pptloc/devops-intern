@@ -1,0 +1,39 @@
+groups:
+- name: cadvisor-glitchbox-alerts
+  rules:
+    - alert: HighCPUUsage
+      expr: rate(container_cpu_usage_seconds_total{name="glitchbox"}[1m]) * 100 > 90
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High CPU Usage"
+        description: "Container 'glitchbox' is using >90% CPU for over 1 minute."
+
+    - alert: HighMemoryUsage
+      expr: container_memory_usage_bytes{name="glitchbox"} > 0.8 * 1024 * 1024 * 1024
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High Memory Usage"
+        description: "Container 'glitchbox' memory usage > 80%."
+
+    - alert: ContainerCrashed
+      expr: time() - container_last_seen{name="glitchbox"} > 60
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Container crash"
+        description: "Container 'glitchbox' not seen for over 60s. May have crashed."
+
+    - alert: HighDiskUsage
+      expr: container_fs_usage_bytes{name="glitchbox"} > 512 * 1024 * 1024
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High Disk Usage"
+        description: "Container 'glitchbox' is using more than 512MB of disk."
+
