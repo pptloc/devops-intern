@@ -103,3 +103,39 @@ graph TD
 │    ├──prometheus.yml
 │
 ```
+## 4.2 Initial Setup
+### 4.2.1 Create an Azure Virtual Machine:
+* Go to the Azure Portal: https://portal.azure.com
+* Navigate to Virtual Machines, then click Create → Azure virtual machine.
+* Configure the required settings:
+    * Resource Group – Choose an existing group or create a new one.
+    * Virtual Machine Name
+    * Region – East Asian
+    * Image – Ubuntu 24.04
+    * Size - 30GB
+    * Authentication Type - Password
+### 4.2.2 Open Firewall Ports for the VM:
+* Once the VM is created, go to its overview page in the Azure Portal
+* In the left-hand menu, click Networking.
+* Under Inbound Port Rules, click Add inbound port rule.
+* Configure the rule as follows:
+  * Destination Port Ranges: 9090, 3000
+  * Protocol: TCP
+  * Source: Any
+  * Name: e.g., allow-prometheus-grafana
+* Click Add to apply the rule.
+### Access your Azure compute instance
+* Open Terminus terminal on your computer
+* Connect to your remote machine 
+### 4.3. Configuration Variables
+# 5. Appendix
+| Tool | Version | Purpose | Documentation |
+|------|---------|---------|---------------|
+| Docker       | Latest | Containerization | https://docs.docker.com                         |
+| Prometheus   | Latest | Monitoring       | https://prometheus.io                           |
+| cAdvisor     | Latest | Monitoring       | https://github.com/google/cadvisor              |
+| Grafana      | Latest | Visualization    | https://grafana.com                             |
+| AlertManager | Latest | Alerting         | https://github.com/prometheus/alertmanager      |
+| Node-exporter | Latest | Monitoring     | https://github.com/prometheus/node_exporter |
+
+  
