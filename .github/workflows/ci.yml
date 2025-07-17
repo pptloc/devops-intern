@@ -44,7 +44,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build Docker image
-        run: docker build -t $DOCKER_IMAGE .
+        run: docker build -t $DOCKER_IMAGE -f aspnet/Dockerfile aspnet/
 
       - name: Push Docker image
         run: docker push $DOCKER_IMAGE
