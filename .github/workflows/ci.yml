@@ -15,6 +15,5 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build & Test via Dockerfile.test
-        - name: Build & Test via Dockerfile.test
-  run: |
-    docker build -f aspnet/Dockerfile.test -t aspnetapp-test aspnet/
+        run: |
+          docker build -f aspnet/Dockerfile.test -t aspnetapp-test aspnet/
