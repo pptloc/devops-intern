@@ -59,4 +59,4 @@ jobs:
             docker pull pptloc/aspnetapp
             docker stop aspnetapp || true
             docker rm aspnetapp || true
-            docker run -d --name aspnetapp -p 80:80 $DOCKER_IMAGE
+            docker run -d --name aspnetapp -p 80:80 pptloc/aspnetapp
