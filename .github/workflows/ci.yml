@@ -56,7 +56,7 @@ jobs:
           username: ${{ secrets.AZURE_USERNAME }}
           key: ${{ secrets.AZURE_SSH_KEY }}
           script: |
-            docker pull $DOCKER_IMAGE
+            docker pull pptloc/aspnetapp
             docker stop aspnetapp || true
             docker rm aspnetapp || true
             docker run -d --name aspnetapp -p 80:80 $DOCKER_IMAGE
