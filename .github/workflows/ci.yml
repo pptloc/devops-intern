@@ -22,13 +22,13 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore
-        run: dotnet restore aspnetapp.sln
+        run: dotnet restore ./aspnet/aspnetapp/aspnetapp.sln
 
       - name: Build
-        run: dotnet build aspnetapp.sln --no-restore
+        run: dotnet build ./aspnet/aspnetapp/aspnetapp.sln --no-restore
 
       - name: Test
-        run: dotnet test aspnetapp.sln --no-build
+        run: dotnet test ./aspnet/aspnetapp/aspnetapp.sln --no-build
 
   docker-deploy:
     needs: build-and-test
