@@ -1,4 +1,4 @@
-name: CI - Build and Test ASP.NET App
+name: CICD - ASP.NET App
 
 on:
   push:
