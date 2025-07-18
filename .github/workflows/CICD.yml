@@ -31,10 +31,10 @@ jobs:
         run: dotnet test ./aspnet/aspnetapp/aspnetapp.sln --no-build
       
       - name: Run Code Format Check
-        run: dotnet format --verify-no-changes
+        run: dotnet format ./aspnet/aspnetapp/aspnetapp.sln --verify-no-changes
 
       - name: Run Static Code Analysis
-        run: dotnet build --no-restore -warnaserror
+        run: dotnet build ./aspnet/aspnetapp/aspnetapp.sln --no-restore -warnaserror
 
       - name: Publish artifact
         uses: actions/upload-artifact@v4
