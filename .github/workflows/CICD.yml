@@ -37,7 +37,8 @@ jobs:
         run: dotnet build ./aspnet/aspnetapp/aspnetapp.sln --no-restore -warnaserror
         
       - name: Publish
-        run: dotnet publish ./aspnetapp/aspnetapp.csproj -c Release -o ./publish
+        run: dotnet publish aspnetapp/aspnetapp.csproj -c Release -o publish
+
 
       - name: Upload publish artifact
         uses: actions/upload-artifact@v4
