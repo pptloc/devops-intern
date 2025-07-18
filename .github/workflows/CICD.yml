@@ -35,7 +35,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
     name: production
-    url: http://<your-public-url>
     steps:
       - uses: actions/checkout@v3
 
