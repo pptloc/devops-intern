@@ -97,4 +97,4 @@ jobs:
             docker pull $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }}
             docker stop aspnetapp || true
             docker rm aspnetapp || true
-            docker run -d --name aspnetapp -p 80:8080 $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }}
+            docker run -d --name aspnetapp -p 80:8080 pptloc/aspnetapp:latest
