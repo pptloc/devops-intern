@@ -2,15 +2,9 @@ name: CI/CD - ASP.NET App
 
 on:
   push:
-    branches:
-      - dev
-      - staging
-      - main
+    branches: [main, staging, dev]
   pull_request:
-    branches:
-      - dev
-      - staging
-      - main
+    branches: [main, staging, dev]
 
 env:
   DOCKER_REPO: pptloc/aspnetapp
@@ -19,82 +13,91 @@ jobs:
   setup-env:
     runs-on: ubuntu-latest
     outputs:
-      env_name: ${{ steps.setenv.outputs.env_name }}
-      image_tag: ${{ steps.setenv.outputs.image_tag }}
+      ENV_NAME: ${{ steps.export-vars.outputs.env_name }}
+      IMAGE_TAG: ${{ steps.export-vars.outputs.image_tag }}
+
     steps:
-      - id: setenv
+      - name: Determine Environment and Image Tag
+        id: export-vars
         run: |
-          if [[ "${GITHUB_REF##*/}" == "main" ]]; then
-            echo "env_name=production" >> $GITHUB_OUTPUT
-            echo "image_tag=latest" >> $GITHUB_OUTPUT
-          elif [[ "${GITHUB_REF##*/}" == "staging" ]]; then
-            echo "env_name=staging" >> $GITHUB_OUTPUT
-            echo "image_tag=staging" >> $GITHUB_OUTPUT
-          elif [[ "${GITHUB_REF##*/}" == "dev" ]]; then
-            echo "env_name=development" >> $GITHUB_OUTPUT
-            echo "image_tag=dev" >> $GITHUB_OUTPUT
+          BRANCH_NAME="${GITHUB_REF##*/}"
+
+          if [[ "$BRANCH_NAME" == "main" ]]; then
+            ENV_NAME="production"
+            IMAGE_TAG="latest"
+          elif [[ "$BRANCH_NAME" == "staging" ]]; then
+            ENV_NAME="staging"
+            IMAGE_TAG="staging"
+          elif [[ "$BRANCH_NAME" == "dev" ]]; then
+            ENV_NAME="development"
+            IMAGE_TAG="dev"
           else
-            echo "env_name=feature" >> $GITHUB_OUTPUT
-            echo "image_tag=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
+            ENV_NAME="feature"
+            IMAGE_TAG="$BRANCH_NAME"
           fi
+
+          echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
   build-and-test:
     needs: setup-env
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
 
-      - name: Restore
+      - name: Restore Dependencies
         run: dotnet restore ./aspnet/aspnetapp/aspnetapp.sln
 
-      - name: Build
+      - name: Build Solution
         run: dotnet build ./aspnet/aspnetapp/aspnetapp.sln --no-restore
 
-      - name: Test
+      - name: Run Tests
         run: dotnet test ./aspnet/aspnetapp/aspnetapp.sln --no-build
 
-  docker-deploy:
+  docker-build-and-push:
     needs: [setup-env, build-and-test]
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-      - name: Login to Docker Hub
+      - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build Docker image
+      - name: Build Docker Image
         run: |
-          docker build -t $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }} -f aspnet/Dockerfile aspnet/
+          docker build -t $DOCKER_REPO:${{ needs.setup-env.outputs.IMAGE_TAG }} -f aspnet/Dockerfile aspnet/
 
-      - name: Push Docker image
+      - name: Push Docker Image
         run: |
-          docker push $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }}
+          docker push $DOCKER_REPO:${{ needs.setup-env.outputs.IMAGE_TAG }}
 
   deploy-to-vm:
-    needs: [setup-env, docker-deploy]
+    needs: [setup-env, docker-build-and-push]
     runs-on: ubuntu-latest
     environment:
-      name: ${{ needs.setup-env.outputs.env_name }}
+      name: ${{ needs.setup-env.outputs.ENV_NAME }}
 
     steps:
-      - name: Deploy via SSH
+      - name: Deploy to Azure VM via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.AZURE_HOST }}
           username: ${{ secrets.AZURE_USERNAME }}
           key: ${{ secrets.AZURE_SSH_KEY }}
           script: |
-            docker pull $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }}
+            docker pull $DOCKER_REPO:${{ needs.setup-env.outputs.IMAGE_TAG }}
             docker stop aspnetapp || true
             docker rm aspnetapp || true
-            docker run -d --name aspnetapp -p 80:8080 pptloc/aspnetapp:latest
+            docker run -d --name aspnetapp -p 80:8080 $DOCKER_REPO:${{ needs.setup-env.outputs.IMAGE_TAG }}
