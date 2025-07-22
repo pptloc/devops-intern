@@ -97,7 +97,8 @@ jobs:
           username: ${{ secrets.AZURE_USERNAME }}
           key: ${{ secrets.AZURE_SSH_KEY }}
           script: |
-            docker pull $DOCKER_REPO:${{ needs.setup-env.outputs.IMAGE_TAG }}
+            IMAGE="pptloc/aspnetapp:${{ needs.setup-env.outputs.IMAGE_TAG }}"
+            docker pull $IMAGE
             docker stop aspnetapp || true
             docker rm aspnetapp || true
-            docker run -d --name aspnetapp -p 80:8080 $DOCKER_REPO:${{ needs.setup-env.outputs.IMAGE_TAG }}
+            docker run -d --name aspnetapp -p 80:8080 $IMAGE
