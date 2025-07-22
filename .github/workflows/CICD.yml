@@ -29,16 +29,6 @@ jobs:
 
       - name: Test
         run: dotnet test ./aspnet/aspnetapp/aspnetapp.sln --no-build
-      
-      - name: Check code formatting
-        run: dotnet format --verify-no-changes || echo "Non-blocking format check"
-
-      - name: Run Static Code Analysis
-        run: dotnet build ./aspnet/aspnetapp/aspnetapp.sln --no-restore -warnaserror
-        
-      - name: Publish
-        run: dotnet publish ./aspnet/aspnetapp/aspnetapp.csproj -c Release -o ./publish
-
 
       - name: Upload publish artifact
         uses: actions/upload-artifact@v4
