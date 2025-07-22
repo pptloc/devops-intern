@@ -1,16 +1,45 @@
-name: CICD - ASP.NET App
+name: CI/CD - ASP.NET App
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - dev
+      - staging
+      - main
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - dev
+      - staging
+      - main
 
 env:
-  DOCKER_IMAGE: pptloc/aspnetapp
+  DOCKER_REPO: pptloc/aspnetapp
 
 jobs:
+  setup-env:
+    runs-on: ubuntu-latest
+    outputs:
+      env_name: ${{ steps.setenv.outputs.env_name }}
+      image_tag: ${{ steps.setenv.outputs.image_tag }}
+    steps:
+      - id: setenv
+        run: |
+          if [[ "${GITHUB_REF##*/}" == "main" ]]; then
+            echo "env_name=production" >> $GITHUB_OUTPUT
+            echo "image_tag=latest" >> $GITHUB_OUTPUT
+          elif [[ "${GITHUB_REF##*/}" == "staging" ]]; then
+            echo "env_name=staging" >> $GITHUB_OUTPUT
+            echo "image_tag=staging" >> $GITHUB_OUTPUT
+          elif [[ "${GITHUB_REF##*/}" == "dev" ]]; then
+            echo "env_name=development" >> $GITHUB_OUTPUT
+            echo "image_tag=dev" >> $GITHUB_OUTPUT
+          else
+            echo "env_name=feature" >> $GITHUB_OUTPUT
+            echo "image_tag=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
+          fi
+
   build-and-test:
+    needs: setup-env
     runs-on: ubuntu-latest
 
     steps:
@@ -30,17 +59,10 @@ jobs:
       - name: Test
         run: dotnet test ./aspnet/aspnetapp/aspnetapp.sln --no-build
 
-      - name: Upload publish artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: published-app
-          path: ./publish/
-
   docker-deploy:
-    needs: build-and-test
+    needs: [setup-env, build-and-test]
     runs-on: ubuntu-latest
-    environment:
-      name: production
+
     steps:
       - uses: actions/checkout@v3
 
@@ -51,20 +73,28 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build Docker image
-        run: docker build -t $DOCKER_IMAGE -f aspnet/Dockerfile aspnet/
+        run: |
+          docker build -t $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }} -f aspnet/Dockerfile aspnet/
 
       - name: Push Docker image
-        run: docker push $DOCKER_IMAGE
+        run: |
+          docker push $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }}
 
-      - name: SSH Deploy to Azure VM
+  deploy-to-vm:
+    needs: [setup-env, docker-deploy]
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.setup-env.outputs.env_name }}
+
+    steps:
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.AZURE_HOST }}
           username: ${{ secrets.AZURE_USERNAME }}
           key: ${{ secrets.AZURE_SSH_KEY }}
           script: |
-            docker pull pptloc/aspnetapp
+            docker pull $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }}
             docker stop aspnetapp || true
             docker rm aspnetapp || true
-            docker run -d --name aspnetapp -p 80:8080 pptloc/aspnetapp
-
+            docker run -d --name aspnetapp -p 80:8080 $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }}
