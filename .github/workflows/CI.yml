@@ -1,4 +1,4 @@
-name: CI/CD - ASP.NET App
+name: CI - ASP.NET App
 
 on:
   push:
@@ -77,28 +77,8 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          docker build -t $DOCKER_REPO:${{ needs.setup-env.outputs.IMAGE_TAG }} -f aspnet/Dockerfile aspnet/
+          docker build -t $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }} -f aspnet/Dockerfile aspnet/
 
       - name: Push Docker Image
         run: |
-          docker push $DOCKER_REPO:${{ needs.setup-env.outputs.IMAGE_TAG }}
-
-  deploy-to-vm:
-    needs: [setup-env, docker-build-and-push]
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ needs.setup-env.outputs.ENV_NAME }}
-
-    steps:
-      - name: Deploy to Azure VM via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.AZURE_HOST }}
-          username: ${{ secrets.AZURE_USERNAME }}
-          key: ${{ secrets.AZURE_SSH_KEY }}
-          script: |
-            IMAGE="pptloc/aspnetapp:${{ needs.setup-env.outputs.IMAGE_TAG }}"
-            docker pull $IMAGE
-            docker stop aspnetapp || true
-            docker rm aspnetapp || true
-            docker run -d --name aspnetapp -p 80:8080 $IMAGE
+          docker push $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }}
