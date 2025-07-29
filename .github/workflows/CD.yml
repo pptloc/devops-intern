@@ -39,8 +39,16 @@ jobs:
           username: ${{ secrets.AZURE_USERNAME }}
           key: ${{ secrets.AZURE_SSH_KEY }}
           script: |
-            IMAGE="$DOCKER_REPO:${{ github.event.inputs.image_tag || github.ref_name }}"
+            TAG="${{ github.event.inputs.image_tag || github.ref_name }}"
+            IMAGE="pptloc/aspnetapp:$TAG"
+
+            echo "🚀 Deploying image: $IMAGE"
+
             docker pull $IMAGE
             docker stop aspnetapp || true
             docker rm aspnetapp || true
-            docker run -d --name aspnetapp -p 80:8080 $IMAGE
+
+            docker run -d \
+              --name aspnetapp \
+              -p 80:8080 \
+              $IMAGE
