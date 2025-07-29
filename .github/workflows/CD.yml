@@ -1,12 +1,19 @@
-
-name: CD - Deploy to VM
+name: CD - Deploy ASP.NET App
 
 on:
   push:
+    branches: [main]
     tags:
-      - '*'
-    branches:
-      - main
+      - 'v*.*.*'
+
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Tag of Docker image to deploy'
+        required: true
+      environment:
+        description: 'Target environment'
+        required: true
 
 env:
   DOCKER_REPO: pptloc/aspnetapp
@@ -15,22 +22,25 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Extract tag
+      - name: Validate inputs
         run: |
-          echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          TAG="${{ github.event.inputs.image_tag || github.ref_name }}"
+          ENV="${{ github.event.inputs.environment || 'production' }}"
 
-      - name: Docker Login
-        uses: docker/login-action@v3
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+-(dev|staging|main)-(d|s|p)-[a-f0-9]{8}$ ]]; then
+            echo "::error::❌ Invalid image tag format: $TAG"
+            exit 1
+          fi
+
+      - name: SSH Deploy
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Pull & Deploy on Azure VM
-        run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} <<EOF
-            docker pull $DOCKER_REPO:$TAG
-            docker stop aspnetapp || true && docker rm aspnetapp || true
-            docker run -d --name aspnetapp -p 80:80 $DOCKER_REPO:$TAG
-          EOF
+          host: ${{ secrets.AZURE_HOST }}
+          username: ${{ secrets.AZURE_USERNAME }}
+          key: ${{ secrets.AZURE_SSH_KEY }}
+          script: |
+            IMAGE="$DOCKER_REPO:${{ github.event.inputs.image_tag || github.ref_name }}"
+            docker pull $IMAGE
+            docker stop aspnetapp || true
+            docker rm aspnetapp || true
+            docker run -d --name aspnetapp -p 80:8080 $IMAGE

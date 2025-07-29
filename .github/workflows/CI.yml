@@ -1,10 +1,9 @@
-
-
-name: CI - Build & Test
+name: CI - ASP.NET App
 
 on:
   push:
     branches: [main, staging, dev]
+
 env:
   DOCKER_REPO: pptloc/aspnetapp
   VERSION: 0.1.0
@@ -16,41 +15,47 @@ jobs:
       ENV_NAME: ${{ steps.vars.outputs.env_name }}
       IMAGE_TAG: ${{ steps.vars.outputs.image_tag }}
     steps:
-      - name: Determine Environment and Image Tag
+      - name: Determine environment
         id: vars
         run: |
-          BRANCH_NAME="${GITHUB_REF##*/}"
-          if [[ "$BRANCH_NAME" == "main" ]]; then
+          BRANCH="${GITHUB_REF##*/}"
+          if [[ "$BRANCH" == "main" ]]; then
             ENV_NAME="production"; SUFFIX="p"
-          elif [[ "$BRANCH_NAME" == "staging" ]]; then
+          elif [[ "$BRANCH" == "staging" ]]; then
             ENV_NAME="staging"; SUFFIX="s"
-          elif [[ "$BRANCH_NAME" == "dev" ]]; then
+          elif [[ "$BRANCH" == "dev" ]]; then
             ENV_NAME="development"; SUFFIX="d"
           else
-            echo "::error::❌ Unsupported branch: $BRANCH_NAME"
+            echo "::error::❌ Unsupported branch: $BRANCH"
             exit 1
           fi
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-8)
-          IMAGE_TAG="${VERSION}-${BRANCH_NAME}-${SUFFIX}-${SHORT_SHA}"
+          TAG="${VERSION}-${BRANCH}-${SUFFIX}-${SHORT_SHA}"
           echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
-          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "image_tag=$TAG" >> $GITHUB_OUTPUT
 
-  build-and-test:
+  build-test:
     needs: setup-env
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
-      - name: Setup .NET 9 SDK
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
+      - run: dotnet restore ./aspnet/aspnetapp/aspnetapp.sln
+      - run: dotnet build ./aspnet/aspnetapp/aspnetapp.sln --no-restore
+      - run: dotnet test ./aspnet/aspnetapp/aspnetapp.sln --no-build
 
-      - name: Restore dependencies
-        run: dotnet restore ./aspnet/aspnetapp/aspnetapp.sln
-
-      - name: Build solution
-        run: dotnet build ./aspnet/aspnetapp/aspnetapp.sln --no-restore
-
-      - name: Run tests
-        run: dotnet test ./aspnet/aspnetapp/aspnetapp.sln --no-build
+  docker-build-push:
+    needs: [setup-env, build-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - run: |
+          docker build -t $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }} \
+            -f aspnet/Dockerfile aspnet/
+          docker push $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }}
