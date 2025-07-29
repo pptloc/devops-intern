@@ -1,3 +1,24 @@
+Skip to content
+Navigation Menu
+pptloc
+devops-intern
+
+Type / to search
+Code
+Issues
+Pull requests
+Actions
+Projects
+Wiki
+Security
+Insights
+Settings
+.github/workflows/CI.yml
+Refactor #4
+Jobs
+Run details
+Workflow file for this run
+.github/workflows/CI.yml at aa5453e
 name: CI - ASP.NET App
 
 on:
@@ -23,7 +44,6 @@ jobs:
             echo "::error::❌ Invalid PR title. Must start with feat/, fix/, etc."
             exit 1
           fi
-
   setup-env:
     runs-on: ubuntu-latest
     outputs:
@@ -48,7 +68,6 @@ jobs:
           IMAGE_TAG="${VERSION}-${BRANCH_NAME}-${SUFFIX}-${SHORT_SHA}"
           echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
-
   build-and-test:
     needs: setup-env
     runs-on: ubuntu-latest
@@ -57,6 +76,14 @@ jobs:
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v4
         with: dotnet-version: '9.0.x'
+ Check failure on line 59 in .github/workflows/CI.yml
+
+
+GitHub Actions
+/ .github/workflows/CI.yml
+Invalid workflow file
+
+You have an error in your yaml syntax on line 59
       - run: dotnet restore ./aspnet/aspnetapp/aspnetapp.sln
       - run: dotnet build ./aspnet/aspnetapp/aspnetapp.sln --no-restore
       - run: dotnet test ./aspnet/aspnetapp/aspnetapp.sln --no-build
@@ -80,3 +107,4 @@ jobs:
             --label "commit=${{ github.sha }}" \
             -f aspnet/Dockerfile aspnet/
       - run: docker push $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }}
+Refactor · pptloc/devops-intern@aa5453e 0 results
