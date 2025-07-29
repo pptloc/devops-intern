@@ -1,24 +1,3 @@
-Skip to content
-Navigation Menu
-pptloc
-devops-intern
-
-Type / to search
-Code
-Issues
-Pull requests
-Actions
-Projects
-Wiki
-Security
-Insights
-Settings
-.github/workflows/CI.yml
-Refactor #4
-Jobs
-Run details
-Workflow file for this run
-.github/workflows/CI.yml at aa5453e
 name: CI - ASP.NET App
 
 on:
@@ -32,6 +11,7 @@ env:
   VERSION: 0.1.0
 
 jobs:
+  # 1. PR Lint: chỉ chạy trên pull_request
   pr-lint:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -44,6 +24,8 @@ jobs:
             echo "::error::❌ Invalid PR title. Must start with feat/, fix/, etc."
             exit 1
           fi
+
+  # 2. Setup env & image tag
   setup-env:
     runs-on: ubuntu-latest
     outputs:
@@ -68,36 +50,45 @@ jobs:
           IMAGE_TAG="${VERSION}-${BRANCH_NAME}-${SUFFIX}-${SHORT_SHA}"
           echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  # 3. Build & test .NET app
   build-and-test:
     needs: setup-env
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
+
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v4
-        with: dotnet-version: '9.0.x'
- Check failure on line 59 in .github/workflows/CI.yml
+        with:
+          dotnet-version: '9.0.x'
 
+      - name: Restore dependencies
+        run: dotnet restore ./aspnet/aspnetapp/aspnetapp.sln
 
-GitHub Actions
-/ .github/workflows/CI.yml
-Invalid workflow file
+      - name: Build solution
+        run: dotnet build ./aspnet/aspnetapp/aspnetapp.sln --no-restore
 
-You have an error in your yaml syntax on line 59
-      - run: dotnet restore ./aspnet/aspnetapp/aspnetapp.sln
-      - run: dotnet build ./aspnet/aspnetapp/aspnetapp.sln --no-restore
-      - run: dotnet test ./aspnet/aspnetapp/aspnetapp.sln --no-build
+      - name: Run tests
+        run: dotnet test ./aspnet/aspnetapp/aspnetapp.sln --no-build
 
+  # 4. Build docker image & push
   docker-build-and-push:
-    needs: [setup-env, build-and-test]
+    needs:
+      - setup-env
+      - build-and-test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
+
       - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Build Docker image
         run: |
           docker build \
@@ -106,5 +97,6 @@ You have an error in your yaml syntax on line 59
             --label "version=${{ env.VERSION }}" \
             --label "commit=${{ github.sha }}" \
             -f aspnet/Dockerfile aspnet/
-      - run: docker push $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }}
-Refactor · pptloc/devops-intern@aa5453e 0 results
+
+      - name: Push Docker image
+        run: docker push $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }}
