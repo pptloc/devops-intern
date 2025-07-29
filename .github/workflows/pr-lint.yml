@@ -1,0 +1,18 @@
+name: PR Title Check
+
+on:
+  pull_request:
+    branches: [main, dev, staging]
+
+jobs:
+  pr-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title format
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          echo "PR Title: $TITLE"
+          if [[ ! "$TITLE" =~ ^(feat|fix|chore|refactor|docs|test)/.+$ ]]; then
+            echo "::error::❌ Invalid PR title. Must start with feat/, fix/, etc."
+            exit 1
+          fi

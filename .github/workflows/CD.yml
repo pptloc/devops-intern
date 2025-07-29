@@ -1,66 +1,36 @@
-name: CD - Deploy ASP.NET App
+
+name: CD - Deploy to VM
 
 on:
-  workflow_dispatch:
-    inputs:
-      image_tag:
-        description: 'Tag of Docker image to deploy (e.g. 0.1.0-dev-d-a1b2c3d4)'
-        required: true
-      environment:
-        description: 'Target environment (production, staging, development)'
-        required: true
+  push:
+    tags:
+      - '*'
+    branches:
+      - main
 
 env:
   DOCKER_REPO: pptloc/aspnetapp
 
 jobs:
-  deploy-to-vm:
+  deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: ${{ inputs.environment }}
-
     steps:
-      - name: Validate input values
+      - uses: actions/checkout@v3
+
+      - name: Extract tag
         run: |
-          TAG="${{ inputs.image_tag }}"
-          ENV="${{ inputs.environment }}"
+          echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
-          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+-(dev|staging|main)-(d|s|p)-[a-f0-9]{8}$ ]]; then
-            echo "::error::❌ Invalid image tag format: $TAG"
-            exit 1
-          fi
-
-          if [[ "$ENV" != "production" && "$ENV" != "staging" && "$ENV" != "development" ]]; then
-            echo "::error::❌ Invalid environment: $ENV"
-            exit 1
-          fi
-
-      - name: Deploy to Azure VM via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Docker Login
+        uses: docker/login-action@v3
         with:
-          host: ${{ secrets.AZURE_HOST }}
-          username: ${{ secrets.AZURE_USERNAME }}
-          key: ${{ secrets.AZURE_SSH_KEY }}
-          script: |
-            IMAGE="${{ env.DOCKER_REPO }}:${{ inputs.image_tag }}"
-            CONTAINER_NAME="aspnetapp-${{ inputs.environment }}"
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-            echo "🚀 Pulling image: $IMAGE"
-            docker pull $IMAGE
-
-            echo "🛑 Stopping previous container (if any)..."
-            docker stop $CONTAINER_NAME || true
-            docker rm $CONTAINER_NAME || true
-
-            echo "✅ Running new container..."
-            docker run -d \
-              --name $CONTAINER_NAME \
-              -p 80:8080 \
-              --restart unless-stopped \
-              -e ASPNETCORE_ENVIRONMENT=${{ inputs.environment }} \
-              --label deployed_by=github_actions \
-              --label env=${{ inputs.environment }} \
-              --label version=${{ inputs.image_tag }} \
-              $IMAGE
-
-            echo "✅ Successfully deployed: $IMAGE on $(date)"
+      - name: Pull & Deploy on Azure VM
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} <<EOF
+            docker pull $DOCKER_REPO:$TAG
+            docker stop aspnetapp || true && docker rm aspnetapp || true
+            docker run -d --name aspnetapp -p 80:80 $DOCKER_REPO:$TAG
+          EOF
