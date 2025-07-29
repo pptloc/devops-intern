@@ -2,8 +2,10 @@ name: CD - Deploy ASP.NET App
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*.*.*'
+
   workflow_dispatch:
     inputs:
       image_tag:
@@ -17,52 +19,14 @@ env:
   DOCKER_REPO: pptloc/aspnetapp
 
 jobs:
-  docker-build-push:
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.export_tag.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v3
-
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Set image tag
-        id: export_tag
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
-            echo "TAG=${{ github.event.inputs.image_tag }}" >> $GITHUB_ENV
-          else
-            TAG="${GITHUB_REF##*/}"
-            echo "tag=$TAG" >> $GITHUB_OUTPUT
-            echo "TAG=$TAG" >> $GITHUB_ENV
-          fi
-
-      - name: Build & Push Docker Image
-        run: |
-          docker build -t $DOCKER_REPO:$TAG -f aspnet/Dockerfile aspnet/
-          docker push $DOCKER_REPO:$TAG
-
   deploy:
     runs-on: ubuntu-latest
-    needs: docker-build-push
     steps:
-      - name: Set environment variables
+      - name: Validate inputs
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "TAG=${{ github.event.inputs.image_tag }}" >> $GITHUB_ENV
-            echo "ENV=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
-          else
-            TAG="${GITHUB_REF##*/}"
-            echo "TAG=$TAG" >> $GITHUB_ENV
-            echo "ENV=production" >> $GITHUB_ENV
-          fi
+          TAG="${{ github.event.inputs.image_tag || github.ref_name }}"
+          ENV="${{ github.event.inputs.environment || 'production' }}"
 
-      - name: Validate image tag
-        run: |
           if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+-(dev|staging|main)-(d|s|p)-[a-f0-9]{8}$ ]]; then
             echo "::error::❌ Invalid image tag format: $TAG"
             exit 1
@@ -75,11 +39,15 @@ jobs:
           username: ${{ secrets.AZURE_USERNAME }}
           key: ${{ secrets.AZURE_SSH_KEY }}
           script: |
-            IMAGE="$DOCKER_REPO:$TAG"
+            TAG="${{ github.event.inputs.image_tag || github.ref_name }}"
+            IMAGE="pptloc/aspnetapp:$TAG"
+
             echo "🚀 Deploying image: $IMAGE"
+
             docker pull $IMAGE
             docker stop aspnetapp || true
             docker rm aspnetapp || true
+
             docker run -d \
               --name aspnetapp \
               -p 80:8080 \
