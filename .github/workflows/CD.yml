@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'Tag of Docker image to deploy'
+        description: 'Tag of Docker image to deploy (e.g. 0.1.0-dev-d-a1b2c3d4)'
         required: true
       environment:
-        description: 'Target environment (e.g., production, staging)'
+        description: 'Target environment (production, staging, development)'
         required: true
 
 env:
@@ -20,6 +20,21 @@ jobs:
       name: ${{ inputs.environment }}
 
     steps:
+      - name: Validate input values
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          ENV="${{ inputs.environment }}"
+
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+-(dev|staging|main)-(d|s|p)-[a-f0-9]{8}$ ]]; then
+            echo "::error::❌ Invalid image tag format: $TAG"
+            exit 1
+          fi
+
+          if [[ "$ENV" != "production" && "$ENV" != "staging" && "$ENV" != "development" ]]; then
+            echo "::error::❌ Invalid environment: $ENV"
+            exit 1
+          fi
+
       - name: Deploy to Azure VM via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -28,7 +43,24 @@ jobs:
           key: ${{ secrets.AZURE_SSH_KEY }}
           script: |
             IMAGE="${{ env.DOCKER_REPO }}:${{ inputs.image_tag }}"
+            CONTAINER_NAME="aspnetapp"
+
+            echo "🚀 Pulling image: $IMAGE"
             docker pull $IMAGE
-            docker stop aspnetapp || true
-            docker rm aspnetapp || true
-            docker run -d --name aspnetapp -p 80:8080 $IMAGE
+
+            echo "🛑 Stopping previous container (if any)..."
+            docker stop $CONTAINER_NAME || true
+            docker rm $CONTAINER_NAME || true
+
+            echo "✅ Running new container..."
+            docker run -d \
+              --name $CONTAINER_NAME \
+              -p 80:8080 \
+              --restart unless-stopped \
+              -e ASPNETCORE_ENVIRONMENT=${{ inputs.environment }} \
+              --label deployed_by=github_actions \
+              --label env=${{ inputs.environment }} \
+              --label version=${{ inputs.image_tag }} \
+              $IMAGE
+
+            echo "🎉 Deployed $IMAGE to ${{ inputs.environment }}"

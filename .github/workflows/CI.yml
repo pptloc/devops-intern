@@ -8,43 +8,65 @@ on:
 
 env:
   DOCKER_REPO: pptloc/aspnetapp
+  VERSION: 0.1.0
 
 jobs:
+  # 1. PR Lint: check title
+  pr-lint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title naming convention
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          echo "PR TITLE: $TITLE"
+
+          if [[ ! "$TITLE" =~ ^(feat|fix|chore|refactor|docs|test)/.+$ ]]; then
+            echo "::error::❌ Invalid PR title. Must start with feat/, fix/, etc."
+            exit 1
+          fi
+
+  # 2. Setup env & image tag
   setup-env:
+    needs: pr-lint
     runs-on: ubuntu-latest
     outputs:
-      ENV_NAME: ${{ steps.export-vars.outputs.env_name }}
-      IMAGE_TAG: ${{ steps.export-vars.outputs.image_tag }}
+      ENV_NAME: ${{ steps.vars.outputs.env_name }}
+      IMAGE_TAG: ${{ steps.vars.outputs.image_tag }}
 
     steps:
       - name: Determine Environment and Image Tag
-        id: export-vars
+        id: vars
         run: |
-          BRANCH_NAME="${GITHUB_REF##*/}"
+          BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF##*/}}"
 
           if [[ "$BRANCH_NAME" == "main" ]]; then
             ENV_NAME="production"
-            IMAGE_TAG="latest"
+            SUFFIX="p"
           elif [[ "$BRANCH_NAME" == "staging" ]]; then
             ENV_NAME="staging"
-            IMAGE_TAG="staging"
+            SUFFIX="s"
           elif [[ "$BRANCH_NAME" == "dev" ]]; then
             ENV_NAME="development"
-            IMAGE_TAG="dev"
+            SUFFIX="d"
           else
-            ENV_NAME="feature"
-            IMAGE_TAG="$BRANCH_NAME"
+            echo "::error::❌ Unsupported branch: $BRANCH_NAME"
+            exit 1
           fi
+
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-8)
+          IMAGE_TAG="${VERSION}-${BRANCH_NAME}-${SUFFIX}-${SHORT_SHA}"
 
           echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
+  # 3. Build & test .NET app
   build-and-test:
     needs: setup-env
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Setup .NET 9 SDK
@@ -52,21 +74,22 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
-      - name: Restore Dependencies
+      - name: Restore dependencies
         run: dotnet restore ./aspnet/aspnetapp/aspnetapp.sln
 
-      - name: Build Solution
+      - name: Build solution
         run: dotnet build ./aspnet/aspnetapp/aspnetapp.sln --no-restore
 
-      - name: Run Tests
+      - name: Run tests
         run: dotnet test ./aspnet/aspnetapp/aspnetapp.sln --no-build
 
+  # 4. Build docker image & push
   docker-build-and-push:
     needs: [setup-env, build-and-test]
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Login to DockerHub
@@ -75,10 +98,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build Docker Image
+      - name: Build Docker image
         run: |
-          docker build -t $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }} -f aspnet/Dockerfile aspnet/
+          docker build \
+            -t $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }} \
+            --label "env=${{ needs.setup-env.outputs.ENV_NAME }}" \
+            --label "version=${{ env.VERSION }}" \
+            --label "commit=${{ github.sha }}" \
+            -f aspnet/Dockerfile aspnet/
 
-      - name: Push Docker Image
+      - name: Push Docker image
         run: |
           docker push $DOCKER_REPO:${{ needs.setup-env.outputs.image_tag }}
